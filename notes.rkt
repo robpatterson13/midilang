@@ -2,7 +2,7 @@
 
 (require syntax/macro-testing (for-syntax syntax/parse "preds.rkt" racket/format))
 
-(provide note notes (for-syntax check-midi-pitch!))
+(provide note notes (for-syntax check-midi-pitch! compile-note))
 
 ;; A NoteSymbol is one of the following:
 ;; - 'C

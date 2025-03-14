@@ -2,14 +2,22 @@
 
 (require "preds.rkt" "notes.rkt" "beat.rkt")
 
-(provide midi-event?
+(provide event?
+         midi-event?
          make-note-on-event
          make-note-off-event
          make-mtrk-event
-         measure)
+         measure
+         track)
+
+;; An Event is an abstract representation of any MidiEvent or MetaEvent.
+(struct event [] #:transparent)
 
 ;; A MidiEvent is an abstract representation of an event played in MIDI.
-(struct midi-event [] #:transparent)
+(struct midi-event event [] #:transparent)
+
+;; A MetaEvent is an abstract representation of a meta event within MIDI.
+(struct meta-event event [] #:transparent)
 
 ;; A NoteOnEvent is a (note-on-event note velocity channel), where note
 ;; refers to the pitch to be played, velocity refers to the velocity at
@@ -83,7 +91,7 @@
   (unless (natural? delta-time)
     (error 'make-mtrk-event
            "delta-time must be a Natural; given ~a" delta-time))
-  (unless (midi-event? event)
+  (unless (event? event)
     (error 'make-mtrk-event
            "event must be a MidiEvent; given ~a" event))
   (mtrk-event delta-time event))
@@ -150,7 +158,21 @@
 ;; that occur on the track.
 (struct midi-track [mtrk-events] #:transparent)
 
+;; Constructs a Track from the given MTrkEvents in the given Measures/Sections.
+;; measure: ((U Measure Section) ...) -> Track
+(define (track . measures/sections)
+  (midi-track
+   (for/fold ([mtrk-events null])
+             ([measure/section measures/sections])
+     (append
+      (if (song-measure? measure/section)
+          (song-measure-mtrk-events measure/section)
+          (song-section-mtrk-events measure/section))
+      mtrk-events))))
+
 ;; A Song is a (song header tracks), where header represents the header
 ;; chunk and tracks represents the track chunks.
 (struct song [header tracks] #:transparent)
+
+
 
