@@ -12,17 +12,35 @@
 
 (define ticks-per-quarter-note 96)
 
-(struct played-note [pitch duration time-since-last-note spans-measures?] #:transparent)
+;; duration and time-since-start-of-measure are MIDI ticks
+(struct played-note [pitch duration velocity channel ticks-since-start-of-measure starts-in-measure? ends-in-measure?] #:transparent)
 
 ;; duration-to-tick : Rational -> Integer
 (define (duration-to-tick duration)
   (floor (* duration ticks-per-quarter-note 4)))
 
-;; create-measure : ExactPositiveInteger PlayedNote -> Measure
-(define (create-measure expected-duration . notes/rests)
-  (define pitches (map played-note-pitch notes/rests))
-  (define ticks (map duration-to-tick (map played-note-duration notes/rests)))
-  (define time-since-last-note (map played-note-time-since-last-note notes/rests))
-  (define spans-measures? (map played-note-spans-measures? notes/rests))
-  (define current-duration 0)
-  )
+;; create-measure : ExactPositiveInteger PlayedNote ... -> Measure
+(define (create-measure expected-duration . notes)
+  (apply measure
+         (for/fold ([table (hash)])
+                   ([note notes])
+           (let ([ticks-since-start (played-note-ticks-since-start-of-measure note)])
+             (hash-set table
+                     ticks-since-start
+                     (append (hash-ref table ticks-since-start '())
+                             (played-note->midi-events the-note)))))))
+
+(define (played-note->midi-events the-note)
+  (let ([pitch (played-note-pitch the-note)]
+        [velocity (played-note-velocity the-note)]
+        [channel (played-note-channel the-note)]))
+  (append (if (played-note-starts-in-measure? the-note)
+              (list (make-note-on-event pitch
+                                        velocity
+                                        channel))
+              '())
+          (if (played-note-ends-in-measure? the-note)
+              (list (make-note-off-event pitch
+                                         velocity
+                                         channel))
+              '())))
