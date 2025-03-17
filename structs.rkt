@@ -3,12 +3,11 @@
 (require "preds.rkt" "notes.rkt" "beat.rkt")
 
 (provide event?
-         midi-event?
          make-note-on-event
          make-note-off-event
+         make-text-event
          make-mtrk-event
-         measure
-         track)
+         measure)
 
 ;; An Event is an abstract representation of any MidiEvent or MetaEvent.
 (struct event [] #:transparent)
@@ -81,19 +80,28 @@
   (check-exn exn:fail?
              (lambda () (make-note-off-event (note 'C) 127 16))))
 
+;; A TextEvent is a (text-event text), where text is the text used
+;; in the MIDI file.
+(struct text-event meta-event [text] #:transparent)
+;; Constructs a TextEvent from the given text.
+(define (make-text-event text)
+  (if (string? text)
+      (text-event text)
+      (error 'make-text-event "text must be a string")))
+
 ;; A MTrkEvent is a (mtrk-event delta-time event), where delta-time
 ;; represents the time since the previous event that the given event
 ;; should be played, with delta-time in units specified by the header.
 (struct mtrk-event [delta-time event] #:transparent)
 ;; Constructs a MTrkEvent from the given delta-time and event.
-;; make-mtrk-event: Natural MidiEvent -> MTrkEvent
+;; make-mtrk-event: Natural Event -> MTrkEvent
 (define (make-mtrk-event delta-time event)
   (unless (natural? delta-time)
     (error 'make-mtrk-event
            "delta-time must be a Natural; given ~a" delta-time))
   (unless (event? event)
     (error 'make-mtrk-event
-           "event must be a MidiEvent; given ~a" event))
+           "event must be an Event; given ~a" event))
   (mtrk-event delta-time event))
 
 (module+ test
@@ -158,21 +166,7 @@
 ;; that occur on the track.
 (struct midi-track [mtrk-events] #:transparent)
 
-;; Constructs a Track from the given MTrkEvents in the given Measures/Sections.
-;; measure: ((U Measure Section) ...) -> Track
-(define (track . measures/sections)
-  (midi-track
-   (for/fold ([mtrk-events null])
-             ([measure/section measures/sections])
-     (append
-      (if (song-measure? measure/section)
-          (song-measure-mtrk-events measure/section)
-          (song-section-mtrk-events measure/section))
-      mtrk-events))))
-
 ;; A Song is a (song header tracks), where header represents the header
 ;; chunk and tracks represents the track chunks.
 (struct song [header tracks] #:transparent)
-
-
 
