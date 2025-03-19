@@ -2,13 +2,29 @@
 
 (require (for-syntax syntax/parse) "structs.rkt" "notes.rkt")
 
-#;(music (4 4) 120 ((measure (list (14 1/4) (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4))) (measure (list (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4))) (measure (list (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4)))))
+#;(music (4 4) 120 ((measure ((14 1/4) (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4))) (measure (list (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4))) (measure (list (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4) (note 'B 4 1/4)))))
 
-#;(define-syntax music
+(define-syntax music
   (lambda (stx)
     (syntax-parse stx
       [(_ (beat/measure:exact-positive-integer duration:exact-positive-integer) tempo:exact-positive-integer (measure ...+))
-       ])))
+       #'(song (header (beat beat/measure duration) tempo)
+               (list (measures measure ...)))])))
+
+(define-syntax measures
+  (lambda (stx)
+    (syntax-parse stx
+      [(_ (note/grouped-notes) ...)
+       #'(track (parse-note/grouped-notes note/grouped-notes) ...)])))
+
+(define-syntax parse-note/grouped-notes
+  (lambda (stx)
+    (syntax-parse stx
+      [(_ ((note-stuff ...) ...))
+       #'(create-measure 384 (parse-note note-stuff ...) ...)] ; change expected duration to syntax parameter
+      [(_ (note-stuff ...))
+       #'(parse-note note-stuff ...)])))
+
 
 (define ticks-per-quarter-note 96)
 
@@ -17,7 +33,7 @@
   (floor (* duration ticks-per-quarter-note 4)))
 
 ;; duration and time-since-start-of-measure are MIDI ticks
-(struct played-note [pitch duration velocity channel ticks-since-start-of-measure starts-in-measure? ends-in-measure?] #:transparent)
+(struct played-note [pitch duration velocity channel ticks-since-last-note starts-in-measure? ends-in-measure?] #:transparent)
 
 ;; Creates a measure of the given duration from the given notes played
 ;; create-measure : ExactPositiveInteger PlayedNote ... -> Measure
@@ -43,32 +59,34 @@
 ;; Creates a table mapping ticks to the events happening on those ticks.
 ;; create-measure-table : PlayedNote ... -> (HashOf Natural MidiEvent)
 (define (create-measure-table . notes)
-  (for/foldr ([table (hash)])
-    ([note notes])
-    (let* ([ticks-since-start (played-note-ticks-since-start-of-measure note)]
-           [current-val (hash-ref table ticks-since-start '())]
-           [ticks-to-end (+ ticks-since-start (played-note-duration note))]
+  (define ticks-so-far 0)
+  (for/fold ([table (hash)])
+            ([note notes])
+    (let* ([ticks-since-last-event (played-note-ticks-since-last-note note)]
+           [new-tick (+ ticks-so-far ticks-since-last-event)]
+           [current-val (hash-ref table new-tick '())]
+           [ticks-to-end (+ new-tick (played-note-duration note))]
            [end-val (hash-ref table ticks-to-end '())])
-      (hash-set
-       (hash-set
-        table
-        ticks-since-start
-        (if (played-note-starts-in-measure? note)
-            (cons (played-note->note-on-event note)
-                  current-val)
-            current-val))
-       ticks-to-end
-       (if (played-note-ends-in-measure? note)
-           (cons (played-note->note-off-event note) end-val)
-           end-val)))))
+      (begin0
+        (hash-set
+         (hash-set
+          table
+          new-tick
+          (if (played-note-starts-in-measure? note)
+              (append current-val
+                      (list  (played-note->note-on-event note)))
+              current-val))
+         ticks-to-end
+         (if (played-note-ends-in-measure? note)
+             (append end-val
+                     (list (played-note->note-off-event note)))
+             end-val))
+        (set! ticks-so-far new-tick)))))
 
 (define (played-note->note-on-event the-note)
-  (let ([pitch (played-note-pitch the-note)]
-        [velocity (played-note-velocity the-note)]
-        [channel (played-note-channel the-note)])
-    (make-note-on-event pitch
-                        velocity
-                        channel)))
+  (make-note-on-event (played-note-pitch the-note)
+                      (played-note-velocity the-note)
+                      (played-note-channel the-note)))
 
 (define (played-note->note-off-event the-note)
   (make-note-off-event (played-note-pitch the-note)
@@ -107,4 +125,27 @@
                          (make-mtrk-event 96 (make-note-off-event 60 127 0))
                          (make-mtrk-event 0 (make-note-off-event 64 127 0))
                          (make-mtrk-event 0 (make-note-off-event 67 127 0))
-                         (make-mtrk-event 0 (make-text-event "End of measure")))))
+                         (make-mtrk-event 0 (make-text-event "End of measure"))))
+
+  (check-equal? (create-measure 384
+                                (played-note 60 96 127 0 0 #t #t)
+                                (played-note 62 96 127 0 96 #t #t)
+                                (played-note 64 96 127 0 96 #t #t))
+                (measure (make-mtrk-event 0 (make-text-event "Start of measure"))
+                         (make-mtrk-event 0 (make-note-on-event 60 127 0))
+                         (make-mtrk-event 96 (make-note-off-event 60 127 0))
+                         (make-mtrk-event 0 (make-note-on-event 62 127 0))
+                         (make-mtrk-event 96 (make-note-off-event 62 127 0))
+                         (make-mtrk-event 0 (make-note-on-event 64 127 0))
+                         (make-mtrk-event 96 (make-note-off-event 64 127 0))
+                         (make-mtrk-event 96 (make-text-event "End of measure"))))
+
+  (check-equal? (create-measure 384
+                                (played-note 60 96 127 0 0 #t #t)
+                                (played-note 64 96 127 0 192 #t #t))
+                (measure (make-mtrk-event 0 (make-text-event "Start of measure"))
+                         (make-mtrk-event 0 (make-note-on-event 60 127 0))
+                         (make-mtrk-event 96 (make-note-off-event 60 127 0))
+                         (make-mtrk-event 96 (make-note-on-event 64 127 0))
+                         (make-mtrk-event 96 (make-note-off-event 64 127 0))
+                         (make-mtrk-event 96 (make-text-event "End of measure")))))

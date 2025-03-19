@@ -1,6 +1,6 @@
 #lang racket
 
-(provide midi-pitch? velocity? channel?)
+(provide midi-pitch? velocity? channel? midi-format?)
 
 ;; Determines whether the given value is a Natural between 0 and
 ;; 127 (inclusive).
@@ -22,6 +22,10 @@
 
 ;; A Channel is a Natural between 0 and 15 (inclusive).
 (define channel? nat<=15?)
+
+;; A MidiFormat is either 0, 1, or 2
+(define (midi-format? val)
+  (and (natural? val) (<= val 2)))
 
 (module+ test
   (require rackunit)

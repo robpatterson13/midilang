@@ -1,6 +1,6 @@
 #lang racket
 
-(provide beat)
+(provide beat time-signature?)
 
 ;; A TimeSignature is a (time-signature beats note), where beats
 ;; refers to the number of beats in a measure, and note refers to

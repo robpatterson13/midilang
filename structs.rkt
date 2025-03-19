@@ -7,7 +7,10 @@
          make-note-off-event
          make-text-event
          make-mtrk-event
-         measure)
+         measure
+         midi-track
+         header
+         song)
 
 ;; An Event is an abstract representation of any MidiEvent or MetaEvent.
 (struct event [] #:transparent)
@@ -165,6 +168,57 @@
 ;; A Track is a (midi-track mtrk-events), where mtrk-events is the MTrk events
 ;; that occur on the track.
 (struct midi-track [mtrk-events] #:transparent)
+;; track: (U Measure Section) ... -> Track
+(define (track . measures/sections)
+  (midi-track (apply append
+                     (for/list ([measure/section measures/sections])
+                       (if (song-measure? measure/section)
+                           (song-measure-mtrk-events measure/section)
+                           (song-section-mtrk-events measure/section))))))
+
+(module+ test
+  (check-equal? (track (measure (make-mtrk-event 0 (make-note-on-event
+                                                    (note 'C)
+                                                    127
+                                                    0))
+                                (make-mtrk-event 96 (make-note-off-event
+                                                     (note 'C)
+                                                     127
+                                                     0))))
+                (midi-track (list (make-mtrk-event
+                                   0
+                                   (make-note-on-event (note 'C) 127 0))
+                                  (make-mtrk-event
+                                   96
+                                   (make-note-off-event (note 'C) 127 0)))))
+
+  (check-equal? (track
+                 (measure (make-mtrk-event 0 (make-text-event "Tacet"))
+                          (make-mtrk-event 384 (make-text-event "End tacet")))
+                 (measure (make-mtrk-event 0 (make-note-on-event
+                                              (note 'C)
+                                              127
+                                              0))
+                          (make-mtrk-event 384 (make-note-off-event
+                                                (note 'C)
+                                                127
+                                                0))))
+                (midi-track
+                 (list
+                  (make-mtrk-event 0 (make-text-event "Tacet"))
+                  (make-mtrk-event 384 (make-text-event "End tacet"))
+                  (make-mtrk-event 0 (make-note-on-event
+                                      (note 'C)
+                                      127
+                                      0))
+                  (make-mtrk-event 384 (make-note-off-event
+                                        (note 'C)
+                                        127
+                                        0))))))
+
+;; A MThd is a (header format time-signature tempo), representing a header
+;; chunk in MIDI with the given format, time signature, and tempo.
+(struct header [format time-signature tempo] #:transparent)
 
 ;; A Song is a (song header tracks), where header represents the header
 ;; chunk and tracks represents the track chunks.
