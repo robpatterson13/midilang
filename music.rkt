@@ -2,14 +2,21 @@
 
 (require (for-syntax syntax/parse) "beat.rkt" "structs.rkt" "notes.rkt")
 
-;; duration and time-since-start-of-measure are MIDI ticks
+;; A PlayedNote is a (played-note pitch duration velocity channel
+;; ticks-since-last-note starts-in-measure? ends-in-measure?), with the
+;; corresponding pitch, duration, velocity, and channel of the note, the
+;; ticks since the last note played, and whether the note starts and ends
+;; in the current measure. duration and ticks-since-last-note are in MIDI
+;; ticks.
 (struct played-note [pitch duration velocity channel ticks-since-last-note starts-in-measure? ends-in-measure?] #:transparent)
 
+;; played-note->note-on-event: PlayedNote -> NoteOnEvent
 (define (played-note->note-on-event the-note)
   (make-note-on-event (played-note-pitch the-note)
                       (played-note-velocity the-note)
                       (played-note-channel the-note)))
 
+;; played-note->note-off-event: PlayedNote -> NoteOffEvent
 (define (played-note->note-off-event the-note)
   (make-note-off-event (played-note-pitch the-note)
                        (played-note-velocity the-note)
@@ -63,12 +70,14 @@
              end-val))
         (set! ticks-so-far new-tick)))))
 
+;; Converts the given list of PlayedNotes to a measure
+;; list->measure: (ListOf PlayedNote) -> Measure
 (define (list->measure lst expected-duration)
   (apply create-measure expected-duration lst))
 
-
-
 (begin-for-syntax
+  ;; Converts the given measures (as represented in music) to a list containing
+  ;; lists of PlayedNotes. Those lists represent the measures in the song.
   (define (compile-measures measures)
     (syntax-parse measures
       [(((~datum measure) note/grouped-notes ...) ...)
@@ -76,6 +85,8 @@
          (map compile-measure (syntax->list #'((note/grouped-notes ...) ...))))
        #'(list compiled ...)]))
 
+  ;; Converts the given measure (as represented in music) to a list of
+  ;; PlayedNotes that represents a measure in the song.
   (define (compile-measure measure)
     (syntax-parse measure
       [(notes/grouped-notes ...)
@@ -95,6 +106,8 @@
                            (compile-duration note/grouped-notes)))))))
        #'(compiled-notes/grouped-notes ...)]))
 
+  ;; Converts the note or group of notes into a list of PlayedNotes
+  ;; representing the notes played at that moment.
   (define (compile-note/grouped-notes note/grouped-notes time-since-last-event)
     (syntax-parse note/grouped-notes
       [((~datum rest) duration:number)
@@ -117,6 +130,8 @@
                                 0)))))
        #'(append compiled-notes ...)]))
 
+  ;; Converts the note or rest to a list containing the corresponding
+  ;; PlayedNote.
   (define (compile-note/rest note/rest time-since-last-event)
     (syntax-parse note/rest
       [((~datum rest) duration:number)
@@ -152,30 +167,32 @@
                            #t)) ; change constants to syntax parameters
            (raise-syntax-error #f "must provide a positive rational duration"))]))
 
+  ;; Extracts the duration of the given note, rest, or group of notes.
   (define (compile-duration note/grouped-notes)
     (syntax-parse note/grouped-notes
       [(contents:expr ... duration:number)
        #'duration]))
 
+  ;; TODO: calculate from tempo
   (define ticks-per-quarter-note 96)
 
   ;; duration-to-tick : Rational -> Integer
   (define (duration-to-tick duration)
-    (floor (* duration ticks-per-quarter-note 4))))
+    (floor (* duration ticks-per-quarter-note 4)))) ; 4 quarter notes to a whole note
 
-(define-syntax test
-  (lambda (stx)
-    (syntax-parse stx
-      [(_ e:expr)
-       (compile-measures #'e)])))
-
-(test ((measure ('B 4 1/4) ('C 4 1/4))))
-
-#|
-compile-measures: undefined;
- cannot reference an identifier before its definition
-  in module: 'anonymous-module
-|#
+;; Converts pseudo-musical notation into a format useful for writing MIDI.
+;; Grammar:
+;; (music (<ExactPositiveInteger> <ExactPositiveInteger>) <ExactPositiveInteger>
+;;        (<measure> ...+))
+;;
+;; <measure> ::= (measure <note/grouped-notes/rest> ...)
+;;
+;; <note/grouped-notes/rest> ::= <note/rest>
+;;                             | (<note/rest> ...)
+;;
+;; <note/rest> ::= (rest <Rational>)
+;;               | (<NoteSymbol> <ExactInteger> <Rational>)
+;;               | (<NoteSymbol> <Rational>)
 (define-syntax music
   (lambda (stx)
     (syntax-parse stx
@@ -192,9 +209,8 @@ compile-measures: undefined;
                                   (length #,compiled-measures)
                                   (lambda (i) 384))))))]))) ; compute value from time signature and tempo
 
+;; EXAMPLE:
 (music (4 4) 120 ((measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4))))
-
-
 
 
 (module+ test
