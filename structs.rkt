@@ -10,7 +10,8 @@
          measure
          midi-track
          header
-         song)
+         song
+         track)
 
 ;; An Event is an abstract representation of any MidiEvent or MetaEvent.
 (struct event [] #:transparent)
