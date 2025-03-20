@@ -19,7 +19,7 @@
     note := (rest duration:rational)
           | (<note/sym> <octave> duration:rational)
           | (<note/sym> duration:rational)
-          | (pitch:midi-pitch <octave> duration:rational)
+          | (<midi-pitch> <octave> duration:rational)
 
     octave : (and exact-integer? (>= -1) (<= 8))
 
@@ -31,6 +31,7 @@
                    | b
                    | #
 
+    midi-pitch : (and natural? (<= 127))
 |#
 
 ;; Example program (Mary Had a Little Lamb):
