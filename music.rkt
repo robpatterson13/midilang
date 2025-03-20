@@ -1,6 +1,7 @@
 #lang racket
 
 (require (for-syntax syntax/parse) "beat.rkt" "structs.rkt" "notes.rkt")
+(provide music)
 
 ;; A PlayedNote is a (played-note pitch duration velocity channel
 ;; ticks-since-last-note starts-in-measure? ends-in-measure?), with the
