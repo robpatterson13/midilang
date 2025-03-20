@@ -21,7 +21,7 @@
           | (<note/sym> duration:rational)
           | (pitch:midi-pitch <octave> duration:rational)
 
-    octave : (and number? (>= -1) (<= 8))
+    octave : (and integer? (>= -1) (<= 8))
 
     note/sym := <note/name><note/modifier>
 
