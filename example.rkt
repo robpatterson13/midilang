@@ -7,7 +7,7 @@
 
    MIDI Grammar:
 
-    music := (music <beat> tempo:exact-positive-integer <measure> ...+)
+    music := (music <beat> tempo:exact-positive-integer (<measure> ...+))
 
     beat := (beat:exact-positive-integer duration:exact-positive-integer)
 
