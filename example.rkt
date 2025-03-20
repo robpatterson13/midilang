@@ -13,11 +13,13 @@
 
     measure := (measure <note/grouped-notes> ...)
 
-    note/grouped-notes := (rest duration:rational)
-                        | (<note/sym> <octave> duration:rational)
-                        | (<note/sym> duration:rational)
-                        | (pitch:midi-pitch <octave> duration:rational)
-                        | (<note/grouped-notes> ...+ duration:rational)
+    note/grouped-notes := <note>
+                        | (<note> ...+ duration:rational)
+
+    note := (rest duration:rational)
+          | (<note/sym> <octave> duration:rational)
+          | (<note/sym> duration:rational)
+          | (pitch:midi-pitch <octave> duration:rational)
 
     octave : (and number? (>= -1) (<= 8))
 
