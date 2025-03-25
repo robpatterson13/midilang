@@ -47,29 +47,28 @@
 ;; Creates a table mapping ticks to the events happening on those ticks.
 ;; create-measure-table : PlayedNote ... -> (HashOf Natural MidiEvent)
 (define (create-measure-table . notes)
-  (define ticks-so-far 0)
-  (for/fold ([table (hash)])
+  (for/fold ([table (hash)]
+             [ticks-so-far 0]
+             #:result table)
             ([note notes])
     (let* ([ticks-since-last-event (played-note-ticks-since-last-note note)]
            [new-tick (+ ticks-so-far ticks-since-last-event)]
            [current-val (hash-ref table new-tick '())]
            [ticks-to-end (+ new-tick (played-note-duration note))]
            [end-val (hash-ref table ticks-to-end '())])
-      (begin0
-        (hash-set
-         (hash-set
-          table
-          new-tick
-          (if (played-note-starts-in-measure? note)
-              (append current-val
-                      (list  (played-note->note-on-event note)))
-              current-val))
-         ticks-to-end
-         (if (played-note-ends-in-measure? note)
-             (append end-val
-                     (list (played-note->note-off-event note)))
-             end-val))
-        (set! ticks-so-far new-tick)))))
+      (values
+       (hash-set* table
+                  new-tick
+                  (if (played-note-starts-in-measure? note)
+                      (append current-val
+                              (list (played-note->note-on-event note)))
+                      current-val)
+                  ticks-to-end
+                  (if (played-note-ends-in-measure? note)
+                      (append end-val
+                              (list (played-note->note-off-event note)))
+                      end-val))
+       new-tick))))
 
 ;; Converts the given list of PlayedNotes to a measure
 ;; list->measure: (ListOf PlayedNote) -> Measure
@@ -77,6 +76,13 @@
   (apply create-measure expected-duration lst))
 
 (begin-for-syntax
+  (define-syntax-class positive-rational
+    #:description "positive rational number"
+    (pattern val
+      #:fail-unless (and (rational? (syntax->datum #'val))
+                         (> (syntax->datum #'val) 0))
+      "expected a positive rational number"))
+  
   ;; Converts the given measures (as represented in music) to a list containing
   ;; lists of PlayedNotes. Those lists represent the measures in the song.
   (define (compile-measures measures)
@@ -91,20 +97,19 @@
   (define (compile-measure measure)
     (syntax-parse measure
       [(notes/grouped-notes ...)
-       (define time-since-last-event 0)
        (define/syntax-parse (compiled-notes/grouped-notes ...)
-         (for/fold ([notes #''()])
+         (for/fold ([notes #''()]
+                    [time-since-last-event 0]
+                    #:result notes)
                    ([note/grouped-notes
                      (syntax->list #'(notes/grouped-notes ...))])
            (define compiled
              (compile-note/grouped-notes
               note/grouped-notes
               time-since-last-event))
-           (begin0 #`(append #,notes #,compiled)
-                   (set! time-since-last-event
-                         (duration-to-tick
-                          (syntax->datum
-                           (compile-duration note/grouped-notes)))))))
+           (values #`(append #,notes #,compiled)
+                   (duration-to-tick
+                    (get-duration note/grouped-notes)))))
        #'(compiled-notes/grouped-notes ...)]))
 
   ;; Converts the note or group of notes into a list of PlayedNotes
@@ -135,44 +140,33 @@
   ;; PlayedNote.
   (define (compile-note/rest note/rest time-since-last-event)
     (syntax-parse note/rest
-      [((~datum rest) duration:number)
-       (define duration-val (syntax->datum #'duration))
-       (if (and (rational? duration-val)
-                (> duration-val 0))
-           #''()
-           (raise-syntax-error #f "must provide a positive rational duration"))]
-      [(((~datum quote) pitch:id) octave:exact-integer duration:number)
-       (define duration-val (syntax->datum #'duration))
-       (if (and (rational? duration-val)
-                (> duration-val 0))
-           #`(list
-              (played-note (note 'pitch octave)
-                           #,(duration-to-tick duration-val)
-                           127
-                           0
-                           #,time-since-last-event
-                           #t
-                           #t)) ; change constants to syntax parameters
-           (raise-syntax-error #f "must provide a positive rational duration"))]
-      [(midi-pitch:nat duration:number)
-       (define duration-val (syntax->datum #'duration))
-       (if (and (rational? duration-val)
-                (> duration-val 0))
-           #`(list
-              (played-note midi-pitch
-                           #,(duration-to-tick duration-val)
-                           127
-                           0
-                           #,time-since-last-event
-                           #t
-                           #t)) ; change constants to syntax parameters
-           (raise-syntax-error #f "must provide a positive rational duration"))]))
+      [((~datum rest) duration:positive-rational)
+       #''()]
+      [(((~datum quote) pitch:id) octave:exact-integer duration:positive-rational)
+       #`(list
+          (played-note (note 'pitch octave)
+                       #,(duration-to-tick (syntax->datum #'duration))
+                       127
+                       0
+                       #,time-since-last-event
+                       #t
+                       #t))] ; change constants to syntax parameters
+      [(midi-pitch:nat duration:positive-rational)
+       #`(list
+          (played-note midi-pitch
+                       #,(duration-to-tick (syntax->datum #'duration))
+                       127
+                       0
+                       #,time-since-last-event
+                       #t
+                       #t))])) ; change constants to syntax parameters
 
   ;; Extracts the duration of the given note, rest, or group of notes.
-  (define (compile-duration note/grouped-notes)
-    (syntax-parse note/grouped-notes
-      [(contents:expr ... duration:number)
-       #'duration]))
+  (define (get-duration note/grouped-notes)
+    (syntax->datum
+     (syntax-parse note/grouped-notes
+       [(contents:expr ... duration:number)
+        #'duration])))
 
   ;; TODO: calculate from tempo
   (define ticks-per-quarter-note 96)
@@ -211,7 +205,7 @@
                                   (lambda (i) 384))))))]))) ; compute value from time signature and tempo
 
 ;; EXAMPLE:
-(music (4 4) 120 ((measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4))))
+#;(music (4 4) 120 ((measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4))))
 
 
 (module+ test
