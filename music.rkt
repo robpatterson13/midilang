@@ -11,6 +11,8 @@
 ;; ticks.
 (struct played-note [pitch duration velocity channel ticks-since-last-note starts-in-measure? ends-in-measure?] #:transparent)
 
+(struct note-info [pitch duration velocity channel])
+
 ;; played-note->note-on-event: PlayedNote -> NoteOnEvent
 (define (played-note->note-on-event the-note)
   (make-note-on-event (played-note-pitch the-note)
@@ -80,7 +82,7 @@
     #:description "positive rational number"
     (pattern val
       #:fail-unless (and (rational? (syntax->datum #'val))
-                         (> (syntax->datum #'val) 0))
+                         (positive? (syntax->datum #'val)))
       "expected a positive rational number"))
   
   ;; Converts the given measures (as represented in music) to a list containing
@@ -97,20 +99,15 @@
   (define (compile-measure measure)
     (syntax-parse measure
       [(notes/grouped-notes ...)
-       (define/syntax-parse (compiled-notes/grouped-notes ...)
-         (for/fold ([notes #''()]
-                    [time-since-last-event 0]
-                    #:result notes)
-                   ([note/grouped-notes
-                     (syntax->list #'(notes/grouped-notes ...))])
-           (define compiled
-             (compile-note/grouped-notes
-              note/grouped-notes
-              time-since-last-event))
-           (values #`(append #,notes #,compiled)
-                   (duration-to-tick
-                    (get-duration note/grouped-notes)))))
-       #'(compiled-notes/grouped-notes ...)]))
+       (define notes-list (syntax->list #'(notes/grouped-notes ...)))
+       (define durations (map get-duration notes-list))
+       (define midi-durations
+         (map duration-to-tick durations))
+       (define/syntax-parse (notes ...)
+         (for/list ([note notes-list]
+                    [time-since-last-event (cons 0 midi-durations)])
+           (compile-note/grouped-notes note time-since-last-event)))
+       #'(append notes ...)]))
 
   ;; Converts the note or group of notes into a list of PlayedNotes
   ;; representing the notes played at that moment.
@@ -126,7 +123,7 @@
        (compile-note/rest #'(midi-pitch duration) time-since-last-event)]
       [(note-stuff:expr ... duration:number)
        (define note-list (syntax->list #'(note-stuff ...)))
-       (define/syntax-parse (compiled-notes ...)
+       (define compiled-notes
          (map compile-note/rest
               note-list
               (build-list (length note-list)
@@ -134,7 +131,7 @@
                             (if (= i 0)
                                 time-since-last-event
                                 0)))))
-       #'(append compiled-notes ...)]))
+       #`(apply append #,compiled-notes)]))
 
   ;; Converts the note or rest to a list containing the corresponding
   ;; PlayedNote.
