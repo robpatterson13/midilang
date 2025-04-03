@@ -195,11 +195,12 @@
          (compile-measures #'(measure ...)))
        #`(song (header 0 (beat beat/measure duration) tempo)
                (list (apply track
-                            (map list->measure
-                                 #,compiled-measures
-                                 (build-list
-                                  (length #,compiled-measures)
-                                  (lambda (i) 384))))))]))) ; compute value from time signature and tempo
+                            (append (map list->measure
+                                         #,compiled-measures
+                                         (build-list
+                                          (length #,compiled-measures)
+                                          (lambda (i) 384)))
+                                    (list (make-mtrk-event 0 (end-of-track-event)))))))]))) ; compute value from time signature and tempo
 
 ;; EXAMPLE:
 #;(music (4 4) 120 ((measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4))))

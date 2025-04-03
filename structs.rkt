@@ -8,10 +8,15 @@
          make-text-event
          make-mtrk-event
          measure
-         midi-track
-         header
-         song
-         track)
+         track
+         (struct-out note-on-event)
+         (struct-out note-off-event)
+         (struct-out text-event)
+         (struct-out end-of-track-event)
+         (struct-out mtrk-event)
+         (struct-out midi-track)
+         (struct-out header)
+         (struct-out song))
 
 ;; An Event is an abstract representation of any MidiEvent or MetaEvent.
 (struct event [] #:transparent)
@@ -93,6 +98,8 @@
       (text-event text)
       (error 'make-text-event "text must be a string")))
 
+(struct end-of-track-event meta-event [])
+
 ;; A MTrkEvent is a (mtrk-event delta-time event), where delta-time
 ;; represents the time since the previous event that the given event
 ;; should be played, with delta-time in units specified by the header.
@@ -169,13 +176,14 @@
 ;; A Track is a (midi-track mtrk-events), where mtrk-events is the MTrk events
 ;; that occur on the track.
 (struct midi-track [mtrk-events] #:transparent)
-;; track: (U Measure Section) ... -> Track
-(define (track . measures/sections)
+;; track: (U MTrkEvent Measure Section) ... -> Track
+(define (track . events/measures/sections)
   (midi-track (apply append
-                     (for/list ([measure/section measures/sections])
-                       (if (song-measure? measure/section)
-                           (song-measure-mtrk-events measure/section)
-                           (song-section-mtrk-events measure/section))))))
+                     (for/list ([event/measure/section events/measures/sections])
+                       (match event/measure/section
+                         [(mtrk-event delta-time event) (list event/measure/section)]
+                         [(song-measure mtrk-events) mtrk-events]
+                         [(song-section mtrk-events) mtrk-events])))))
 
 (module+ test
   (check-equal? (track (measure (make-mtrk-event 0 (make-note-on-event
