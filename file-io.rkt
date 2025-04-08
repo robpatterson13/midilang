@@ -27,9 +27,10 @@
     (apply bytes-append
            (for/list ([event (midi-track-mtrk-events track)])
              (event->bytes event))))
-  (bytes-append #"MTrk"
-                (integer->integer-bytes (bytes-length event-bytes) 4 #f #t)
-                event-bytes))
+  (write-bytes-avail (bytes-append #"MTrk"
+                                   (integer->integer-bytes (bytes-length event-bytes) 4 #f #t)
+                                   event-bytes)
+                     output-file))
 
 (define (event->bytes the-event)
   (bytes-append (make-variable-length-bytes (mtrk-event-delta-time the-event))
@@ -50,9 +51,22 @@
     (let ([byte (bitwise-and n #x7F)]
           [remaining (arithmetic-shift n -7)])
       (if (= remaining 0)
-          (cons byte acc)
+          (cons (bitwise-ior byte #x80) acc)
           (accumulator remaining (cons (bitwise-ior byte #x80) acc)))))
-  (list->bytes (accumulator n '())))
+  (let ([last-byte (bitwise-and n #x7F)]
+        [remaining (arithmetic-shift n -7)])
+    (if (= remaining 0)
+        (bytes last-byte)
+        (list->bytes (accumulator remaining (list last-byte))))))
+
+(module+ test
+  (require rackunit)
+  (check-equal? (make-variable-length-bytes #x00000000) (bytes #x00))
+  (check-equal? (make-variable-length-bytes #x00000040) (bytes #x40))
+  (check-equal? (make-variable-length-bytes #x0000007f) (bytes #x7f))
+  (check-equal? (make-variable-length-bytes #x00000080) (bytes #x81 #x00))
+  (check-equal? (make-variable-length-bytes #x08000000) (bytes #xc0 #x80 #x80 #x00))
+  (check-equal? (make-variable-length-bytes #x0fffffff) (bytes #xff #xff #xff #x7f)))
 
 ;; Test
 (define the-song

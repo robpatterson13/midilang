@@ -98,7 +98,7 @@
       (text-event text)
       (error 'make-text-event "text must be a string")))
 
-(struct end-of-track-event meta-event [])
+(struct end-of-track-event meta-event [] #:transparent)
 
 ;; A MTrkEvent is a (mtrk-event delta-time event), where delta-time
 ;; represents the time since the previous event that the given event
