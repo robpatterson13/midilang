@@ -3,34 +3,35 @@
 (require "structs.rkt" "music.rkt")
 
 (define (write-to-file song-to-write file-path)
-  (define output-file (open-output-file file-path))
+  (define output-file (open-output-file file-path #:exists 'replace))
   (define tracks (song-tracks song-to-write))
-  (write-header (song-header song-to-write) (length tracks) output-file)
-  (write-tracks tracks output-file)
+  (write-bytes-avail 
+   (bytes-append (header-bytes (song-header song-to-write) (length tracks))
+                 (tracks-bytes tracks))
+   output-file)
   (close-output-port output-file))
 
-(define (write-header header num-tracks output-file)
-  (define to-write
-    (bytes-append #"MThd"
-                  (integer->integer-bytes 6 4 #f #t)
-                  (integer->integer-bytes (header-format header) 2 #f #t)
-                  (integer->integer-bytes num-tracks 2 #f #t)
-                  (integer->integer-bytes 96 2 #f #t))) ; change to reflect tempo and time signature
-  (write-bytes-avail to-write output-file))
+(define (header-bytes header num-tracks)
+  (bytes-append
+   #"MThd"
+   (integer->integer-bytes 6 4 #f #t)
+   (integer->integer-bytes (header-format header) 2 #f #t)
+   (integer->integer-bytes num-tracks 2 #f #t)
+   (integer->integer-bytes ticks-per-quarter-note 2 #f #t)))
 
-(define (write-tracks tracks output-file)
-  (for ([track tracks])
-    (write-track track output-file)))
+(define (tracks-bytes tracks)
+  (apply bytes-append
+         (for/list ([track tracks])
+           (track-bytes track))))
 
-(define (write-track track output-file)
+(define (track-bytes track)
   (define event-bytes
     (apply bytes-append
            (for/list ([event (midi-track-mtrk-events track)])
              (event->bytes event))))
-  (write-bytes-avail (bytes-append #"MTrk"
-                                   (integer->integer-bytes (bytes-length event-bytes) 4 #f #t)
-                                   event-bytes)
-                     output-file))
+  (bytes-append #"MTrk"
+                (integer->integer-bytes (bytes-length event-bytes) 4 #f #t)
+                event-bytes))
 
 (define (event->bytes the-event)
   (bytes-append (make-variable-length-bytes (mtrk-event-delta-time the-event))
@@ -44,7 +45,12 @@
                                  (make-variable-length-bytes (string-length text))
                                  (string->bytes/latin-1 text))]
                   [(end-of-track-event)
-                   (bytes #xFF #x2F #x00)])))
+                   (bytes #xFF #x2F #x00)]
+                  [(set-tempo-event microseconds-per-quarter-note)
+                   (bytes-append (bytes #xFF #x51 #x03)
+                                 (subbytes
+                                  (integer->integer-bytes microseconds-per-quarter-note 4 #f #t)
+                                  1))])))
 
 (define (make-variable-length-bytes n)
   (define (accumulator n acc)

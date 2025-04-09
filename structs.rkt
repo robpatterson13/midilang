@@ -13,6 +13,7 @@
          (struct-out note-off-event)
          (struct-out text-event)
          (struct-out end-of-track-event)
+         (struct-out set-tempo-event)
          (struct-out mtrk-event)
          (struct-out midi-track)
          (struct-out header)
@@ -99,6 +100,8 @@
       (error 'make-text-event "text must be a string")))
 
 (struct end-of-track-event meta-event [] #:transparent)
+
+(struct set-tempo-event meta-event [microseconds-per-quarter-note] #:transparent)
 
 ;; A MTrkEvent is a (mtrk-event delta-time event), where delta-time
 ;; represents the time since the previous event that the given event
