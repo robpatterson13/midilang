@@ -1,7 +1,7 @@
 #lang racket
 
-(require (for-syntax syntax/parse) "beat.rkt" "structs.rkt" "notes.rkt")
-(provide music ticks-per-quarter-note)
+(require (for-syntax syntax/parse "constants.rkt") "beat.rkt" "structs.rkt" "notes.rkt" "constants.rkt")
+(provide music)
 
 ;; A PlayedNote is a (played-note pitch duration velocity channel
 ;; ticks-since-last-note starts-in-measure? ends-in-measure?), with the
@@ -30,31 +30,33 @@
 (define (create-measure expected-duration . notes)
   (let ([table (apply create-measure-table notes)])
     (apply measure
+           (let-values
+               ([(body end-time)
+                 (for/fold ([result '()]
+                            [current-duration 0])
+                           ([tick (in-range (add1 expected-duration))])
+                   (let ([ref (hash-ref table tick '())])
+                     (values
+                      (if (null? ref)
+                          result
+                          (append result
+                                  (for/list ([event ref]
+                                             [offset
+                                              (build-list
+                                               (length ref)
+                                               (lambda (i)
+                                                 (if (= i 0)
+                                                     (- tick current-duration)
+                                                     0)))])
+                                    (make-mtrk-event offset
+                                                     event))))
+                      (if (null? ref)
+                          current-duration
+                          tick))))])
            (append (list (make-mtrk-event 0 (make-text-event "Start of measure")))
-                   (for/fold ([result '()]
-                              [current-duration 0]
-                              #:result result)
-                             ([tick (in-range (add1 expected-duration))])
-                     (let ([ref (hash-ref table tick '())])
-                       (values
-                        (if (null? ref)
-                            result
-                            (append result
-                                    (for/list ([event ref]
-                                               [offset
-                                                (build-list
-                                                 (length ref)
-                                                 (lambda (i)
-                                                   (if (= i 0)
-                                                       (- tick current-duration)
-                                                       0)))])
-                                      (make-mtrk-event offset
-                                                       event))))
-                        (if (null? ref)
-                            current-duration
-                            tick))))
-                     (list (make-mtrk-event 0
-                                          (make-text-event "End of measure")))))))
+                   body
+                   (list (make-mtrk-event (- expected-duration end-time)
+                                          (make-text-event "End of measure"))))))))
 
 ;; Creates a table mapping ticks to the events happening on those ticks.
 ;; create-measure-table : PlayedNote ... -> (HashOf Natural MidiEvent)
@@ -107,20 +109,24 @@
   
   ;; Converts the given measures (as represented in music) to a list containing
   ;; lists of PlayedNotes. Those lists represent the measures in the song.
-  (define (compile-measures measures)
+  (define (compile-measures measures measure-length)
     (syntax-parse measures
       [(((~datum measure) note/grouped-notes ...) ...)
+       (define notes-list (syntax->list #'((note/grouped-notes ...) ...)))
        (define/syntax-parse (compiled ...)
-         (map compile-measure (syntax->list #'((note/grouped-notes ...) ...))))
+         (map compile-measure notes-list (build-list (length notes-list) (lambda (i) measure-length))))
        #'(list compiled ...)]))
 
   ;; Converts the given measure (as represented in music) to a list of
   ;; PlayedNotes that represents a measure in the song.
-  (define (compile-measure measure)
+  (define (compile-measure measure measure-length)
     (syntax-parse measure
       [(notes/grouped-notes ...)
        (define notes-list (syntax->list #'(notes/grouped-notes ...)))
        (define durations (map get-duration notes-list))
+       (unless (= (apply + durations)
+                  measure-length)
+         (raise-syntax-error #f "Measure length does not match time signature" measure))
        (define midi-durations
          (map duration-to-tick durations))
        (define/syntax-parse (notes ...)
@@ -133,25 +139,36 @@
   ;; representing the notes played at that moment.
   (define (compile-note/grouped-notes note/grouped-notes time-since-last-event)
     (syntax-parse note/grouped-notes
-      [((~datum rest) duration:number)
+      [((~datum rest) duration:positive-rational)
        #`(list #,(compile-note/rest #'(rest duration) time-since-last-event))]
-      [(((~datum quote) pitch:id) duration:number)
+      [(((~datum quote) pitch:id) duration:positive-rational)
        #`(list #,(compile-note/rest #'('pitch 4 duration) time-since-last-event))]
-      [(((~datum quote) pitch:id) octave:exact-integer duration:number)
+      [(((~datum quote) pitch:id) octave:exact-integer duration:positive-rational)
        #`(list #,(compile-note/rest #'('pitch octave duration) time-since-last-event))]
-      [(midi-pitch:nat duration:number)
+      [(midi-pitch:nat duration:positive-rational)
        #`(list #,(compile-note/rest #'(midi-pitch duration) time-since-last-event))]
-      [(note-stuff:expr ... duration:number)
-       (define note-list (syntax->list #'(note-stuff ...)))
-       (define compiled-notes
-         (map compile-note/rest
-              note-list
-              (build-list (length note-list)
-                          (lambda (i)
-                            (if (= i 0)
-                                time-since-last-event
-                                0)))))
-       #`(apply list #,compiled-notes)]))
+      [(first-note:expr other-notes:expr ... duration:positive-rational)
+       (define other-note-list (syntax->list #'(other-notes ...)))
+       (define/syntax-parse (other-notes-compiled ...)
+         (map compile-special-note
+              other-note-list
+              (build-list (length other-note-list)
+                          (lambda (i) 0))
+              (build-list (length other-note-list)
+                          (lambda (i) #'duration))))
+       #`(cons #,(compile-special-note #'first-note time-since-last-event #'duration)
+               (list other-notes-compiled ...))]))
+
+  (define (compile-special-note note time-since-last-event duration)
+    (syntax-parse note
+      [((~datum quote) pitch:id)
+       (compile-note/rest #`('pitch 4 #,duration) time-since-last-event)]
+      [(((~datum quote) pitch:id))
+       (compile-note/rest #`('pitch 4 #,duration) time-since-last-event)]
+      [(((~datum quote) pitch:id) octave:exact-integer)
+       (compile-note/rest #`('pitch octave #,duration) time-since-last-event)]
+      [(((~datum quote) pitch:id) octave:exact-integer full-duration:positive-rational)
+       (compile-note/rest #'('pitch octave full-duration) time-since-last-event)]))
 
   ;; Converts the note or rest to a list containing the corresponding
   ;; PlayedNote.
@@ -183,16 +200,10 @@
        [(contents:expr ... duration:number)
         #'duration])))
 
-  ;; TODO: calculate from tempo
-  (define ticks-per-quarter-note 96)
-
   ;; duration-to-tick : Rational -> Integer
   (define (duration-to-tick duration)
-    (floor (* duration ticks-per-quarter-note 4)))) ; 4 quarter notes to a whole note
+    (floor (* duration ticks-per-whole-note)))) ; 4 quarter notes to a whole note
 
-(define microseconds-per-minute 60000000)
-
-(define ticks-per-quarter-note 96)
 
 ;; Converts pseudo-musical notation into a format useful for writing MIDI.
 ;; Grammar:
@@ -214,24 +225,22 @@
           tempo:exact-positive-integer
           (measure:expr ...+))
        (define compiled-measures
-         (compile-measures #'(measure ...)))
+         (compile-measures #'(measure ...) (/ (syntax->datum #'beat/measure) (syntax->datum #'duration))))
        #`(song (header 0 (beat beat/measure duration) tempo)
                (list (apply track
                             (append (list
                                      (make-mtrk-event 0
                                                       (set-tempo-event
                                                        (floor (/ (* microseconds-per-minute
-                                                                    4)
-                                                                 duration tempo)))))
+                                                                    duration)
+                                                                 quarter-notes-per-whole-note
+                                                                 tempo)))))
                                     (map list->measure
                                          #,compiled-measures
                                          (build-list
                                           (length #,compiled-measures)
-                                          (lambda (i) 384)))
+                                          (lambda (i) (/ (* ticks-per-whole-note beat/measure) duration))))
                                     (list (make-mtrk-event 0 (end-of-track-event)))))))])))
-
-;; EXAMPLE:
-#;(music (4 4) 120 ((measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4)) (measure ('B 4 1/4) ('B 4 1/4) ('B 4 1/4) ('B 4 1/4))))
 
 
 (module+ test

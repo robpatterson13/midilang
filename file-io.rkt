@@ -1,8 +1,12 @@
 #lang racket
 
-(require "structs.rkt" "music.rkt")
+(require "structs.rkt" "constants.rkt")
 
-(define (write-to-file song-to-write file-path)
+(provide write-to-midi-file)
+
+;; Writes the given Song to a file on the given Path.
+;; write-to-midi-file: Song Path -> Void
+(define (write-to-midi-file song-to-write file-path)
   (define output-file (open-output-file file-path #:exists 'replace))
   (define tracks (song-tracks song-to-write))
   (write-bytes-avail 
@@ -11,6 +15,8 @@
    output-file)
   (close-output-port output-file))
 
+;; Creates the bytes that represent the given Header in MIDI format
+;; header-bytes: Header Natural -> Bytes
 (define (header-bytes header num-tracks)
   (bytes-append
    #"MThd"
@@ -73,14 +79,3 @@
   (check-equal? (make-variable-length-bytes #x00000080) (bytes #x81 #x00))
   (check-equal? (make-variable-length-bytes #x08000000) (bytes #xc0 #x80 #x80 #x00))
   (check-equal? (make-variable-length-bytes #x0fffffff) (bytes #xff #xff #xff #x7f)))
-
-;; Test
-(define the-song
-  (music (4 4)
-       120
-       ((measure ('E 1/4) ('D 1/4) ('C 1/4) ('D 1/4)) (measure ('E 1/4) ('E 1/4) ('E 1/2))
-        (measure ('D 1/4) ('D 1/4) ('D 1/2))          (measure ('E 1/4) ('G 1/4) ('G 1/2))
-        (measure ('E 1/4) ('D 1/4) ('C 1/4) ('D 1/4)) (measure ('E 1/4) ('E 1/4) ('E 1/4) ('E 1/4))
-        (measure ('D 1/4) ('D 1/4) ('E 1/4) ('D 1/4)) (measure ('C 1)))))
-
-(write-to-file the-song "test.mid")
