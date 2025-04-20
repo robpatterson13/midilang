@@ -35,21 +35,22 @@
 |#
 
 ;; Example program (Mary Had a Little Lamb):
-#;(music (4 4)
+(define mary-had-a-little-lamb
+  (music (4 4)
        120
        ((measure ('E 1/4) ('D 1/4) ('C 1/4) ('D 1/4)) (measure ('E 1/4) ('E 1/4) ('E 1/2))
         (measure ('D 1/4) ('D 1/4) ('D 1/2))          (measure ('E 1/4) ('G 1/4) ('G 1/2))
         (measure ('E 1/4) ('D 1/4) ('C 1/4) ('D 1/4)) (measure ('E 1/4) ('E 1/4) ('E 1/4) ('E 1/4))
-        (measure ('D 1/4) ('D 1/4) ('E 1/4) ('D 1/4)) (measure ('C 1))))
-#;(define duck
+        (measure ('D 1/4) ('D 1/4) ('E 1/4) ('D 1/4)) (measure ('C 1)))))
+
+(define duck
   (music (4 4)
        180
        ((measure ('C 5 1/4) ('C 5 1/4) ('F 1/4) ('A 1/8) ('A 1/8)) (measure ('A# 1/8) ('A# 1/8) ('A 1/4) ('G 1/4) ('C 5 1/8) ('C 5 1/8))
         (measure ('C 5 1/4) ('C 5 1/8) ('C 5 1/8) ('C 5 1/2))      (measure ('D 5 1/8) ('C 5 1/8) ('C 5 1/8) ('C 5 1/8) (rest 1/2))
         (measure ('C 5 1/2) ('C 1/4)   ('A 3 1/4))                 (measure ('F 3 1)))))
-#;duck
 
-#;(define dark-tune
+(define dark-tune
   (music (12 8)
          180
          ((measure ('E 2 1/8) ('E 3 1/8)  ('E 2 1/8) ('F 3 1/8) ('E 3 1/8) ('E 2 1/8)
@@ -64,8 +65,6 @@
                    ('G 3 1/8) ('E 3 1/8)  ('E 2 1/8) ('F 3 1/8) ('E 3 1/8) ('E 2 1/8))
           (measure ('E 2 1/8) ('Bb 3 1/8) ('A 3 1/8) ('E 2 1/8) ('A 3 1/8) ('G 3 1/8)
                    ('E 2 1/8) ('G 3 1/8)  ('F 3 1/8) ('E 2 1/8) ('F 3 1/8) ('E 3 1/8)))))
-#;dark-tune
-#;(write-to-midi-file duck "duck.mid")
 
 (define chord-progression
   (music (4 4)
@@ -73,6 +72,9 @@
          ((measure ('C ('E 4 1/2) 'G 1/4) ('C 'F 'G 1/4) ('C ('E 4 1/2) 'G 1/4) ('C 'D 'G 1/4))
           (measure ('G 'B ('D 5) 1/2) ('F 'A ('C 5) 1/2)))))
 
+(write-to-midi-file mary-had-a-little-lamb "mary-had-a-little-lamb.mid")
+(write-to-midi-file duck "duck.mid")
+(write-to-midi-file dark-tune "dark-tune.mid")
 (write-to-midi-file chord-progression "chord-progression.mid")
 
 ;; Example expansion

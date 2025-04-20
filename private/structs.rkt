@@ -94,13 +94,19 @@
 ;; in the MIDI file.
 (struct text-event meta-event [text] #:transparent)
 ;; Constructs a TextEvent from the given text.
+;; make-text-event: String -> TextEvent
 (define (make-text-event text)
   (if (string? text)
       (text-event text)
       (error 'make-text-event "text must be a string")))
 
+;; An EndOfTrackEvent is an (end-of-track-event), which represents
+;; the end of a MIDI track.
 (struct end-of-track-event meta-event [] #:transparent)
 
+;; A SetTempoEvent is a (set-tempo-event microseconds-per-quarter-note),
+;; which represents setting the tempo of a MIDI track to the given number
+;; of microseconds per quarter note.
 (struct set-tempo-event meta-event [microseconds-per-quarter-note] #:transparent)
 
 ;; A MTrkEvent is a (mtrk-event delta-time event), where delta-time

@@ -25,11 +25,15 @@
    (integer->integer-bytes num-tracks 2 #f #t)
    (integer->integer-bytes ticks-per-quarter-note 2 #f #t)))
 
+;; Creates the bytes that represent the given Tracks in MIDI format
+;; tracks-bytes: (ListOf Track) -> Bytes
 (define (tracks-bytes tracks)
   (apply bytes-append
          (for/list ([track tracks])
            (track-bytes track))))
 
+;; Creates the bytes that represent the given Track in MIDI format
+;; track-bytes: Track -> Bytes
 (define (track-bytes track)
   (define event-bytes
     (apply bytes-append
@@ -39,6 +43,8 @@
                 (integer->integer-bytes (bytes-length event-bytes) 4 #f #t)
                 event-bytes))
 
+;; Creates the bytes that represent the given MTrkEvent in MIDI format
+;; event->bytes: MTrkEvent -> Bytes
 (define (event->bytes the-event)
   (bytes-append (make-variable-length-bytes (mtrk-event-delta-time the-event))
                 (match (mtrk-event-event the-event)
@@ -58,6 +64,8 @@
                                   (integer->integer-bytes microseconds-per-quarter-note 4 #f #t)
                                   1))])))
 
+;; Creates the bytes that represent the given Natural as a variable-length quantity.
+;; make-variable-length-bytes: Natural -> Bytes
 (define (make-variable-length-bytes n)
   (define (accumulator n acc)
     (let ([byte (bitwise-and n #x7F)]
