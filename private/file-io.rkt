@@ -6,8 +6,8 @@
 
 ;; Writes the given Song to a file on the given Path.
 ;; write-to-midi-file: Song Path -> Void
-(define (write-to-midi-file song-to-write file-path)
-  (define output-file (open-output-file file-path #:exists 'replace))
+(define (write-to-midi-file song-to-write file-path #:exists (exists-flag 'error))
+  (define output-file (open-output-file file-path #:exists exists-flag))
   (define tracks (song-tracks song-to-write))
   (write-bytes-avail 
    (bytes-append (header-bytes (song-header song-to-write) (length tracks))

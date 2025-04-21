@@ -72,10 +72,10 @@
          ((measure ('C ('E 4 1/2) 'G 1/4) ('C 'F 'G 1/4) ('C ('E 4 1/2) 'G 1/4) ('C 'D 'G 1/4))
           (measure ('G 'B ('D 5) 1/2) ('F 'A ('C 5) 1/2)))))
 
-(write-to-midi-file mary-had-a-little-lamb "mary-had-a-little-lamb.mid")
-(write-to-midi-file duck "duck.mid")
-(write-to-midi-file dark-tune "dark-tune.mid")
-(write-to-midi-file chord-progression "chord-progression.mid")
+(write-to-midi-file mary-had-a-little-lamb "mary-had-a-little-lamb.mid" #:exists 'replace)
+(write-to-midi-file duck "duck.mid" #:exists 'replace)
+(write-to-midi-file dark-tune "dark-tune.mid" #:exists 'replace)
+(write-to-midi-file chord-progression "chord-progression.mid" #:exists 'replace)
 
 ;; Example expansion
 #;(song
